@@ -22,7 +22,7 @@ try {
 export const generateQuiz = async (req, res) => {
   try {
     const { topic } = req.body;
-    
+
     if (!topic) {
       return res.status(400).json({ error: 'El tema es requerido' });
     }
@@ -41,20 +41,29 @@ export const generateQuiz = async (req, res) => {
         {
           role: 'system',
           content:
-            'Eres un asistente que genera 5 preguntas de opción múltiple sobre un tema específico. Las preguntas deben ser claras y con 4 opciones de respuesta, incluyendo una opción correcta.',
+            'Eres un asistente que genera 5 preguntas de opción múltiple sobre un tema específico. Cada pregunta debe tener 4 opciones (A, B, C, D) y debe especificarse claramente cuál es la respuesta correcta en una línea separada con el formato "Respuesta correcta: X".',
         },
         {
           role: 'user',
-          content: `Genera 5 preguntas de opción múltiple sobre ${topic}. Cada pregunta debe tener 4 opciones de respuesta, de las cuales una debe ser correcta. Debes analizar la informacion para que puedas establecer la respuesta correcta, no solamente marcar cualquier respuesta como correcta.`,
+          content: `Genera 5 preguntas de opción múltiple sobre ${topic}. 
+Cada pregunta debe seguir este formato:
+
+Pregunta: ¿Ejemplo?
+A. Opción A
+B. Opción B
+C. Opción C
+D. Opción D
+Respuesta correcta: C
+
+Haz lo mismo para todas las preguntas.`,
         },
       ],
-      max_tokens: 500,
+      max_tokens: 800,
       temperature: 0.7,
     });
 
     const response = completion.choices[0].message.content;
-
-    // Aquí procesamos la respuesta para obtener las preguntas y opciones
+    console.log('Respuesta de OpenAI:\n', response); // 👈 esta línea nueva
     const questions = parseQuizResponse(response);
 
     res.json({ questions });
@@ -67,19 +76,37 @@ export const generateQuiz = async (req, res) => {
   }
 };
 
-// Función para procesar la respuesta y generar preguntas
+// Nuevo parser que lee la respuesta correcta explícitamente
 const parseQuizResponse = (response) => {
   const questions = [];
-  const questionBlocks = response.split('\n\n'); // Separar por bloques de pregunta
+  const blocks = response.split(/\n(?=Pregunta \d+:)/g); // separa por "Pregunta X:"
 
-  questionBlocks.forEach((block) => {
-    const lines = block.split('\n');
-    if (lines.length >= 5) {
-      const question = lines[0].replace('Pregunta:', '').trim();
-      const options = lines.slice(1, 5).map((line) => line.replace('Opción:', '').trim());
-      const correct = options[0]; // Suponemos que la primera opción es la correcta (esto puede ajustarse)
-      
-      questions.push({ question, options, correct });
+  blocks.forEach((block) => {
+    const lines = block.trim().split('\n').filter(Boolean);
+    if (lines.length < 6) return; // aseguramos que tenga lo necesario
+
+    const questionMatch = lines[0].match(/^Pregunta \d+: (.+)/);
+    const correctMatch = lines.find(line => line.startsWith('Respuesta correcta:'));
+
+    if (!questionMatch || !correctMatch) return;
+
+    const questionText = questionMatch[1].trim();
+
+    const options = lines.slice(1, 5).map(line => {
+      const match = line.match(/^[A-D]\.\s*(.+)/);
+      return match ? match[1].trim() : null;
+    }).filter(Boolean);
+
+    const correctLetter = correctMatch.split(':')[1].trim().toUpperCase();
+    const correctIndex = ['A', 'B', 'C', 'D'].indexOf(correctLetter);
+    const correctOption = options[correctIndex];
+
+    if (questionText && options.length === 4 && correctOption) {
+      questions.push({
+        question: questionText,
+        options,
+        correct: correctOption,
+      });
     }
   });
 
