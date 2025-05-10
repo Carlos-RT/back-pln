@@ -45,7 +45,7 @@ export const generateQuiz = async (req, res) => {
         },
         {
           role: 'user',
-          content: `Genera 5 preguntas de opción múltiple sobre ${topic}. Cada pregunta debe tener 4 opciones de respuesta, de las cuales una debe ser correcta.`,
+          content: `Genera 5 preguntas de opción múltiple sobre ${topic}. Cada pregunta debe tener 4 opciones de respuesta, de las cuales una debe ser correcta. Debes analizar la informacion para que puedas establecer la respuesta correcta, no solamente marcar cualquier respuesta como correcta.`,
         },
       ],
       max_tokens: 500,
