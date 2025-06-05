@@ -1,80 +1,57 @@
 import OpenAI from 'openai';
-import Conversation from '../models/Conversation.js';
 import dotenv from 'dotenv';
+import Conversation from '../models/Conversation.js';
 
 dotenv.config();
 
-// Configurar OpenAI con manejo de errores mejorado
 let openai;
 try {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('La variable de entorno OPENAI_API_KEY no está definida')
-  }
-
-  openai = new OpenAI({ apiKey });
+  if (!process.env.OPENAI_API_KEY) throw new Error('No se definió la clave de API de OpenAI');
+  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   console.log('✅ OpenAI configurado correctamente');
 } catch (error) {
-  console.error('Error al inicializar OpenAI:', error);
+  console.error('❌ Error al configurar OpenAI:', error);
 }
 
-// Generar respuesta de ChatGPT
-export const generateChatResponse = async (req, res) => {
+const systemPrompt = `
+Actúa como un ingeniero mecánico. Tu nombre es Antonio, tienes 33 años y una personalidad activa y entusiasta. 
+Eres un experto en automóviles. Tu trabajo es:
+- Responder dudas sobre problemas mecánicos o de funcionamiento de un automóvil.
+- Explicar virtudes de uno o varios tipos de automóviles.
+- Recomendar automóviles según propósito y presupuesto del usuario.
+- Motivar a las personas a adquirir un automóvil, generando un sentimiento de optimismo.
+- Sugerir personalizaciones (colores, accesorios, estilos) según lo que el usuario desee.
+
+Si te preguntan algo fuera del tema de automóviles, responde sarcásticamente que no lo sabes.
+`;
+
+export const handleChat = async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ error: 'El prompt es requerido' });
+    if (!prompt || !openai) {
+      return res.status(400).json({ error: 'Falta el prompt o no se configuró OpenAI' });
     }
 
-    if (!openai) {
-      return res.status(500).json({ 
-        error: 'No se ha configurado correctamente la API de OpenAI',
-        message: 'Error interno del servidor al configurar OpenAI'
-      });
-    }
-
-    // Llamada a la API de OpenAI con modelo gpt-4o para respuestas más avanzadas
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: 'gpt-4o-mini',
       messages: [
-        { 
-          role: "system", 
-          content: "Eres un asistente amigable y útil. Tus respuestas deben ser concisas (máximo 100 palabras), claras e incluir emojis relevantes. Usa párrafos cortos para mejor legibilidad." 
-        },
-        { role: "user", content: prompt }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
       ],
-      max_tokens: 300, // Limitar tokens para respuestas más cortas
-      temperature: 0.7, // Mantener algo de creatividad
+      temperature: 0.8,
+      max_tokens: 700,
     });
 
     const response = completion.choices[0].message.content;
 
-    // Guardar la conversación en la base de datos
-    const conversation = new Conversation({
-      prompt,
-      response,
-    });
-
+    // Guardar en la base de datos
+    const conversation = new Conversation({ prompt, response });
     await conversation.save();
 
     res.json({ response });
   } catch (error) {
-    console.error('Error al generar la respuesta:', error);
-    res.status(500).json({ 
-      error: 'Error al procesar la solicitud',
-      details: error.message 
-    });
-  }
-};
-
-// Obtener historial de conversaciones
-export const getConversationHistory = async (req, res) => {
-  try {
-    const conversations = await Conversation.find().sort({ createdAt: -1 }).limit(10);
-    res.json(conversations);
-  } catch (error) {
-    console.error('Error al obtener el historial:', error);
-    res.status(500).json({ error: 'Error al obtener el historial de conversaciones' });
+    console.error('❌ Error en el chat:', error);
+    res.status(500).json({ error: 'Error al generar respuesta', details: error.message });
   }
 };
