@@ -1,9 +1,21 @@
+// routes/chatRoutes.js
 import express from 'express';
-import { handleChat } from '../controllers/chatController.js';
+import {
+  registerUser,
+  loginUser,
+  handleChat,
+  getHistory
+} from '../controllers/chatController.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Ruta para conversar con Antonio
-router.post('/', handleChat);
+// Auth
+router.post('/register', registerUser);
+router.post('/login', loginUser);
+
+// Chat
+router.post('/', authenticate, handleChat);
+router.get('/history', authenticate, getHistory);
 
 export { router };
